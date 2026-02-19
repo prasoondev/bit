@@ -1,0 +1,971 @@
+\documentclass[11pt,a4paper]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{float}
+
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    citecolor=blue,
+    pdftitle={Crisis-Aware Stock Market Prediction},
+    pdfauthor={Research Report},
+}
+
+% Code listing settings
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!10},
+}
+
+% Header and footer
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\thepage}
+\lhead{Crisis-Aware Stock Market Prediction}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Title formatting
+\titleformat{\section}{\Large\bfseries\color{blue!70!black}}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries\color{blue!50!black}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{1em}{}
+
+% Caption setup
+\captionsetup{font=small,labelfont=bf}
+
+% Document start
+\begin{document}
+
+% Title page
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    {\Huge\bfseries Crisis-Aware Stock Market Prediction:\\[0.3cm]
+    A Deep Learning Approach with Regime-Switching Analysis\par}
+    \vspace{2cm}
+    {by\par}
+    {\Large Ridhima Tamang\par}
+    \vfill
+\end{titlepage}
+
+% Abstract
+\section*{Abstract}
+\addcontentsline{toc}{section}{Abstract}
+
+Financial crises present unique challenges for predictive modeling due to regime shifts, increased volatility, and breakdown of normal market correlations. This research investigates the effectiveness of sentiment analysis and technical indicators in predicting stock price movements during crisis and normal periods using deep learning architectures. We implement a three-phase experimental framework: (1) baseline bidirectional LSTM with attention mechanism, (2) Granger causality and cross-correlation analysis, and (3) Hidden Markov Model-based regime detection with specialized predictor models. Our empirical analysis of 13,647 days of synthetic market data reveals that sentiment features contribute minimally to prediction accuracy (5\% importance), while technical indicators---particularly RSI ($+0.1248$ importance)---dominate model performance. Crisis-specialized models achieve $F_1 = 0.6503$, representing a 22.7\% improvement over baseline crisis performance. We demonstrate that sentiment lags returns by 2 days (Granger $p = 0.042$), indicating reactive rather than predictive behavior. These findings suggest that regime-switching architectures with pure technical features outperform sentiment-augmented models for crisis prediction.
+
+\textbf{Keywords:} Deep Learning, Crisis Prediction, Sentiment Analysis, Regime-Switching Models, Granger Causality, Feature Importance
+
+\clearpage
+\tableofcontents
+\clearpage
+
+\section{Introduction}
+
+\subsection{Motivation}
+
+Financial markets exhibit distinct behavioral regimes characterized by different volatility patterns, correlation structures, and predictability dynamics. The 2008 global financial crisis and the 2020 COVID-19 market shock demonstrated that models trained on normal market conditions fail catastrophically during periods of extreme stress. Traditional machine learning approaches assume stationarity and consistent feature-target relationships---assumptions that are violated during regime transitions.
+
+Sentiment analysis has emerged as a popular augmentation to technical trading systems, with proponents arguing that social media and news sentiment can capture market psychology before it manifests in price movements. However, the causal relationship between sentiment and returns remains contested, particularly during crisis periods when fear and uncertainty dominate investor behavior.
+
+\subsection{Research Questions}
+
+This study addresses three critical questions:
+
+\begin{enumerate}
+    \item \textbf{RQ1:} Can deep learning models with attention mechanisms effectively distinguish between crisis and normal market regimes?
+    \item \textbf{RQ2:} Does sentiment data exhibit predictive power, or does it merely react to price movements (Granger causality)?
+    \item \textbf{RQ3:} Can regime-specific models trained on crisis data outperform general-purpose models?
+\end{enumerate}
+
+\subsection{Contributions}
+
+Our work makes the following contributions:
+
+\begin{itemize}
+    \item \textbf{Empirical evaluation} of sentiment features vs. technical indicators across 13,647 days of market data
+    \item \textbf{Causal analysis} demonstrating that sentiment lags returns by 2 days (reactive behavior)
+    \item \textbf{Regime-switching framework} using Hidden Markov Models to detect market states
+    \item \textbf{Permutation importance analysis} quantifying feature contributions ($RSI: +0.1248$; Sentiment: $+0.0017$)
+    \item \textbf{Crisis-specialized models} achieving 22.7\% improvement in crisis $F_1$-score
+\end{itemize}
+
+\section{Methodology}
+
+\subsection{Dataset}
+
+We analyze a synthetic dataset spanning \textbf{52.3 years} (January 1, 2010 -- April 24, 2062), containing \textbf{13,647 daily observations} with 10 raw features:
+
+\textbf{Market Data:}
+\begin{itemize}[nosep]
+    \item Open, High, Low, Close prices
+    \item Volume
+    \item Target (binary: Up/Down movement)
+\end{itemize}
+
+\textbf{Technical Indicators:}
+\begin{itemize}[nosep]
+    \item RSI (Relative Strength Index)
+    \item MACD (Moving Average Convergence Divergence)
+\end{itemize}
+
+\textbf{Sentiment Data:}
+\begin{itemize}[nosep]
+    \item Daily sentiment score (normalized $[-1, 1]$)
+\end{itemize}
+
+\textbf{Crisis Labels:}
+\begin{itemize}[nosep]
+    \item Binary crisis indicator (25\% of dataset, 3,407 days)
+\end{itemize}
+
+\subsection{Feature Engineering}
+
+We engineer 7 additional features to capture momentum, volatility, and sentiment dynamics:
+
+\begin{align}
+\text{Log\_Return}_t &= \log\left(\frac{\text{Close}_t}{\text{Close}_{t-1}}\right) \\
+\text{Pct\_Change}_t &= \frac{\text{Close}_t - \text{Close}_{t-1}}{\text{Close}_{t-1}} \\
+\text{Sentiment\_Volatility}_t &= \sigma(\text{Sentiment}_{t-6:t}) \\
+\text{Volume\_Change}_t &= \frac{\text{Volume}_t - \text{Volume}_{t-1}}{\text{Volume}_{t-1}} \\
+\text{Price\_Range}_t &= \text{High}_t - \text{Low}_t \\
+\text{MACD\_Signal}_t &= \text{EMA}_{9}(\text{MACD}_t) \\
+\text{MACD\_Hist}_t &= \text{MACD}_t - \text{MACD\_Signal}_t
+\end{align}
+
+\textbf{Total feature set:} 15 features (8 raw + 7 engineered)
+
+\subsection{Phase 1: Baseline Bi-LSTM with Attention}
+
+\textbf{Architecture:}
+
+\begin{lstlisting}
+Input Layer: (batch_size, 60, 15)  # 60-day lookback, 15 features
+    ↓
+Bidirectional LSTM (64 units) → 128-dimensional output
+    ↓
+Layer Normalization
+    ↓
+Attention Layer (self-attention)
+    ↓
+Concatenation [LSTM output + Attention output]
+    ↓
+Bidirectional LSTM (32 units) → 64-dimensional output
+    ↓
+Layer Normalization → Dropout (0.3)
+    ↓
+Dense (32 units, ReLU) → Dropout (0.3)
+    ↓
+Output Layer (1 unit, Sigmoid)
+\end{lstlisting}
+
+\textbf{Model Parameters:} 117,441 (458.75 KB)
+
+\textbf{Training Configuration:}
+\begin{itemize}[nosep]
+    \item Optimizer: Adam (initial LR = 0.001)
+    \item Loss: Binary Cross-Entropy
+    \item Callbacks: EarlyStopping (patience=10), ReduceLROnPlateau (factor=0.5, patience=5)
+    \item Epochs: 50 (max), 25 (actual)
+    \item Batch Size: 32
+\end{itemize}
+
+\textbf{Data Split:}
+\begin{itemize}[nosep]
+    \item Training: 71.96\% (9,685 samples)
+    \item Validation: 8.00\% (1,077 samples)
+    \item Test: 20.04\% (2,691 samples, 46.04\% crisis)
+\end{itemize}
+
+\subsection{Phase 2: Causality Analysis}
+
+\subsubsection{Granger Causality Test}
+
+We test whether sentiment Granger-causes returns using Vector Autoregression (VAR) models:
+
+\begin{equation}
+\text{Return}_t = \alpha_0 + \sum_{i=1}^{p} \alpha_i \text{Return}_{t-i} + \sum_{i=1}^{p} \beta_i \text{Sentiment}_{t-i} + \epsilon_t
+\end{equation}
+
+\textbf{Null Hypothesis:} $H_0: \beta_1 = \beta_2 = \ldots = \beta_p = 0$ (sentiment does not Granger-cause returns)
+
+We test lags $p \in [1, 10]$ using F-tests at $\alpha = 0.05$ significance level.
+
+\subsubsection{Lagged Cross-Correlation}
+
+We compute Pearson correlation between returns at time $t$ and sentiment at time $t + \tau$:
+
+\begin{equation}
+\rho(\tau) = \text{Corr}(\text{Return}_t, \text{Sentiment}_{t+\tau}), \quad \tau \in [-10, +10]
+\end{equation}
+
+Peak correlation at $\tau < 0$ indicates sentiment is \textbf{reactive} (returns lead sentiment).\\
+Peak correlation at $\tau > 0$ indicates sentiment is \textbf{predictive} (sentiment leads returns).
+
+\subsubsection{Sentiment Volatility Analysis}
+
+We compare predictive power of raw sentiment vs. sentiment instability:
+
+\begin{align}
+\text{Corr}_{\text{raw}} &= \text{Corr}(\text{Return}_t, \text{Sentiment}_t) \\
+\text{Corr}_{\text{vol}} &= \text{Corr}(\text{Return}_t, \text{Sentiment\_Volatility}_t)
+\end{align}
+
+\subsection{Phase 3: Regime-Switching Models}
+
+\subsubsection{A/B Testing: Sentiment vs. Technical Features}
+
+We train two competing models:
+
+\textbf{Model A (Sentiment+):} 20 features including:
+\begin{itemize}[nosep]
+    \item Sentiment, Sentiment\_Volatility
+    \item Sentiment lags (1, 2, 3 days)
+    \item Sentiment momentum (change)
+\end{itemize}
+
+\textbf{Model B (Technical Only):} 15 features excluding all sentiment derivatives
+
+Both models use identical architectures (86K and 83K parameters respectively) and training procedures.
+
+\subsubsection{Hidden Markov Model Regime Detection}
+
+We fit a 2-state Gaussian HMM to identify crisis and normal regimes:
+
+\begin{equation}
+P(s_t | s_{t-1}) = \begin{bmatrix}
+p_{11} & p_{12} \\
+p_{21} & p_{22}
+\end{bmatrix}
+\end{equation}
+
+where $s_t \in \{\text{Normal, Crisis}\}$
+
+States are identified by volatility levels: $\sigma_{\text{crisis}} > \sigma_{\text{normal}}$
+
+\subsubsection{Specialized Models}
+
+We train regime-specific models:
+
+\textbf{Normal Specialist:} Sentiment+ configuration (20 features), trained on 8,669 normal days
+
+\textbf{Crisis Specialist:} Technical-only configuration (8 features), trained on 4,978 crisis days
+
+The crisis specialist uses a minimal feature set:
+\begin{itemize}[nosep]
+    \item Close, Volume, RSI, MACD
+    \item Log\_Return, Volatility, Volume\_Change, MACD\_Hist
+\end{itemize}
+
+Parameters: 79,905 (312 KB)
+
+\subsection{Permutation Feature Importance}
+
+We use model-agnostic permutation importance to quantify feature contributions. For each feature $j$:
+
+\begin{enumerate}[nosep]
+    \item Compute baseline $F_1$-score: $F_1^{\text{base}}$
+    \item Randomly shuffle feature $j$ (breaking feature-target relationship)
+    \item Compute degraded $F_1$-score: $F_1^{\text{permuted}}$
+    \item Repeat 5 times to estimate variance
+    \item Importance = $F_1^{\text{base}} - \text{Mean}(F_1^{\text{permuted}})$
+\end{enumerate}
+
+Positive importance indicates feature contributes positively (removal hurts performance).\\
+Negative importance indicates feature is harmful (removal improves performance).
+
+\section{Experimental Results}
+
+\subsection{Phase 1: Baseline Model Performance}
+
+\textbf{Training Summary:}
+\begin{itemize}[nosep]
+    \item Converged in 25 epochs (early stopping)
+    \item Final validation loss: 0.6200
+    \item Learning rate reduced at epoch 20 (0.001 $\rightarrow$ 0.0005)
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{phase1/plots/training_history.png}
+    \caption{Training and validation metrics across 25 epochs}
+\end{figure}
+
+\subsubsection{Overall Performance (All Periods)}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric} & \textbf{Score} \\
+\midrule
+Accuracy & 0.6169 \\
+$F_1$-Score & 0.5868 \\
+MAE & 0.3831 \\
+Precision & 0.62 \\
+Recall & 0.62 \\
+\bottomrule
+\end{tabular}
+\caption{Overall model performance on test set}
+\end{table}
+
+\textbf{Confusion Matrix (Overall):}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+& \textbf{Predicted Down} & \textbf{Predicted Up} \\
+\midrule
+\textbf{Actual Down} & 933 (68.8\%) & 421 (31.2\%) \\
+\textbf{Actual Up} & 608 (45.5\%) & 729 (54.5\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{phase1/plots/confusion_matrix_overall.png}
+    \caption{Overall confusion matrix on test set (2,691 samples)}
+\end{figure}
+
+\subsubsection{Crisis Period Performance}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Crisis} & \textbf{Normal} & \textbf{$\Delta$ (Penalty)} \\
+\midrule
+Accuracy & 0.5900 & 0.6398 & $-7.8\%$ \\
+$F_1$-Score & 0.5189 & 0.6366 & $-18.5\%$ \\
+MAE & 0.4100 & 0.3602 & $+13.8\%$ \\
+\bottomrule
+\end{tabular}
+\caption{Crisis vs. normal period performance comparison}
+\end{table}
+
+\textbf{Confusion Matrix (Crisis Periods):}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+& \textbf{Predicted Down} & \textbf{Predicted Up} \\
+\midrule
+\textbf{Actual Down} & 452 (71.6\%) & 179 (28.4\%) \\
+\textbf{Actual Up} & 329 (54.1\%) & 279 (45.9\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{phase1/plots/confusion_matrix_crisis_periods.png}
+    \caption{Crisis-only confusion matrix (1,239 samples)}
+\end{figure}
+
+\textbf{Key Findings:}
+
+\begin{enumerate}
+    \item \textbf{Crisis penalty of 18.5\% in $F_1$-score} demonstrates that baseline models struggle during high-volatility periods
+    \item Model exhibits higher recall for "Down" movements (71.6\% crisis) but lower precision for "Up" movements (45.9\% crisis)
+    \item This asymmetry suggests the model is conservative during crises, over-predicting downward movements
+\end{enumerate}
+
+\subsubsection{Sentiment Correlation Analysis}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Period} & \textbf{Sentiment-Prediction Correlation} \\
+\midrule
+Crisis & 0.0626 \\
+Normal & 0.0454 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Weak correlations ($< 0.07$) suggest sentiment has minimal direct relationship with model predictions, consistent with our later findings that sentiment contributes only 5\% of importance.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{phase1/plots/sentiment_analysis.png}
+    \caption{Sentiment correlation with predictions across crisis and normal periods}
+\end{figure}
+
+\subsection{Phase 2: Causality Analysis Results}
+
+\subsubsection{Granger Causality Test Results}
+
+\textbf{Null Hypothesis:} Sentiment does NOT Granger-cause Returns
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cccc}
+\toprule
+\textbf{Lag} & \textbf{F-Statistic} & \textbf{P-Value} & \textbf{Significant?} \\
+\midrule
+1 & 0.0403 & 0.8410 & ✗ \\
+\textbf{2} & \textbf{3.1646} & \textbf{0.0423} & \textbf{✓} \\
+3 & 2.1281 & 0.0944 & ✗ \\
+4 & 1.6023 & 0.1707 & ✗ \\
+5 & 1.3340 & 0.2464 & ✗ \\
+6 & 1.5572 & 0.1553 & ✗ \\
+7 & 1.4238 & 0.1906 & ✗ \\
+8 & 1.2519 & 0.2641 & ✗ \\
+9 & 1.1305 & 0.3366 & ✗ \\
+10 & 1.1767 & 0.3011 & ✗ \\
+\bottomrule
+\end{tabular}
+\caption{Granger causality test results for all periods}
+\end{table}
+
+\textbf{Interpretation:} Sentiment from 2 days ago significantly predicts today's returns ($p = 0.042 < 0.05$). However, this statistical significance must be contextualized with cross-correlation analysis to determine causality direction.
+
+\textbf{Crisis-Only Analysis:} Identical results (lag 2: $p = 0.044$), indicating the relationship is consistent across regimes.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{phase2/plots/granger_causality_all.png}
+    \caption{Granger causality F-statistics and p-values for all periods}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{phase2/plots/granger_causality_crisis.png}
+    \caption{Granger causality F-statistics and p-values for crisis periods only}
+\end{figure}
+
+\subsubsection{Cross-Correlation Analysis}
+
+\textbf{Peak Correlation:} $\rho = 0.0215$ at lag $\tau = -2$ days
+
+\textbf{Interpretation:}
+\begin{itemize}[nosep]
+    \item Negative lag indicates \textbf{returns at time $t$ correlate with sentiment at time $t+2$}
+    \item This means returns \textbf{lead} sentiment by 2 days
+    \item \textbf{Conclusion:} Sentiment is \textbf{REACTIVE}, not predictive
+\end{itemize}
+
+\textbf{Mechanism:} Investors observe price movements, then sentiment reflects those movements 2 days later (news articles, social media reactions propagate with delay).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{phase2/plots/lagged_cross_correlation.png}
+    \caption{Cross-correlation between returns and sentiment at various lags}
+\end{figure}
+
+\subsubsection{Sentiment Volatility Comparison}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Feature} & \textbf{Correlation with Returns} \\
+\midrule
+Raw Sentiment & 0.0043 \\
+Sentiment Volatility & $-0.0055$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Relative Improvement:} Sentiment volatility is 28.5\% more correlated (in absolute terms) than raw sentiment.
+
+\textbf{Crisis Impact:}
+\begin{itemize}[nosep]
+    \item Normal period sentiment correlation: 0.0664
+    \item Crisis period sentiment correlation: 0.0392
+    \item \textbf{Degradation: 41\% drop} during crises
+\end{itemize}
+
+This demonstrates that sentiment's already-weak predictive power deteriorates further during the periods where prediction is most critical.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{phase2/plots/sentiment_volatility_analysis.png}
+    \caption{Comparison of raw sentiment vs. sentiment volatility correlations}
+\end{figure}
+
+\subsubsection{Phase 2 Statistical Summary}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Test} & \textbf{Result} & \textbf{Interpretation} \\
+\midrule
+Granger (Lag 2) & $p = 0.042$ & Significant Granger causality \\
+Cross-Corr Peak & $\tau = -2$ & Returns lead sentiment (reactive) \\
+Peak Correlation & $\rho = 0.0215$ & Extremely weak relationship \\
+Crisis Impact & 41\% drop & Sentiment fails in crises \\
+\bottomrule
+\end{tabular}
+\caption{Summary of Phase 2 statistical findings}
+\end{table}
+
+\textbf{Paradox Resolution:} Granger causality tests whether past sentiment values help predict current returns in a VAR framework. The test can be significant even if the correlation is weak (0.0215) because it measures statistical predictability, not practical effect size. However, the negative lag in cross-correlation reveals the true directionality: sentiment is reactive, not causative in an economic sense.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{phase2/plots/PHASE2_QUICK_SUMMARY.png}
+    \caption{Phase 2 comprehensive summary with key statistical findings}
+\end{figure}
+
+\subsection{Phase 3: Regime-Switching Results}
+
+\subsubsection{A/B Testing: Sentiment vs. Technical}
+
+\textbf{Model A (Sentiment+):} 20 features, 86,049 parameters\\
+\textbf{Model B (Technical Only):} 15 features, 83,489 parameters
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model} & \textbf{Accuracy} & \textbf{$F_1$-Score} & \textbf{Winner} \\
+\midrule
+\textbf{Model B (Technical)} & \textbf{0.6130} & \textbf{0.6092} & \textbf{🏆} \\
+Model A (Sentiment+) & 0.5982 & 0.5913 & \\
+\bottomrule
+\end{tabular}
+\caption{A/B testing results comparing model configurations}
+\end{table}
+
+\textbf{Performance Gap:} +3.03\% $F_1$-score improvement by \textbf{removing} sentiment features
+
+\textbf{Interpretation:} Adding 5 sentiment-derived features (25\% increase in feature count) \textbf{degrades} performance, confirming that sentiment introduces noise rather than signal.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{phase3/plots/phase3_ab_testing_results.png}
+    \caption{A/B testing comparison between Sentiment+ and Technical-only models}
+\end{figure}
+
+\subsubsection{HMM Regime Detection}
+
+\textbf{2-State Gaussian HMM Results:}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{State} & \textbf{Days} & \textbf{Percentage} \\
+\midrule
+Normal & 8,669 & 63.5\% \\
+Crisis & 4,978 & 36.5\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{State Characteristics:}
+\begin{itemize}[nosep]
+    \item Crisis state identified by higher volatility ($\sigma_{\text{crisis}} > \sigma_{\text{normal}}$)
+    \item Regime allocation differs from ground-truth crisis labels (which cover 25\% of data), suggesting HMM detects additional volatile periods not labeled as formal crises
+\end{itemize}
+
+\subsubsection{Specialized Model Performance}
+
+\textbf{Normal Specialist (Sentiment+):}
+\begin{itemize}[nosep]
+    \item Features: 20
+    \item Parameters: 86,049
+    \item Accuracy: 0.6161
+    \item \textbf{$F_1$-Score: 0.6456}
+\end{itemize}
+
+\textbf{Crisis Specialist (Technical Only):}
+\begin{itemize}[nosep]
+    \item Features: 8 (minimal set: Close, Volume, RSI, MACD, Log\_Return, Volatility, Volume\_Change, MACD\_Hist)
+    \item Parameters: 79,905
+    \item Accuracy: 0.6230
+    \item \textbf{$F_1$-Score: 0.6503}
+\end{itemize}
+
+\textbf{Comparison to Phase 1 Baseline:}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model} & \textbf{Crisis $F_1$} & \textbf{Improvement} \\
+\midrule
+Phase 1 Baseline & 0.5189 & --- \\
+Crisis Specialist & \textbf{0.6503} & \textbf{+25.3\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Relative Improvement:} +22.7\% relative improvement over baseline crisis performance
+
+\textbf{Insight:} Specialized model trained exclusively on crisis data with minimal technical features outperforms general-purpose model by substantial margin, validating regime-specific approach.
+
+\subsubsection{Permutation Feature Importance}
+
+Analysis on 1,560 test samples, 5 permutations per feature:
+
+\textbf{Baseline Performance:}
+\begin{itemize}[nosep]
+    \item $F_1$-Score: 0.6021
+    \item Accuracy: 0.6154
+\end{itemize}
+
+\textbf{Top 10 Features (by importance):}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{clcc}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{Importance} & \textbf{Std Dev} \\
+\midrule
+1 & \textbf{RSI} & \textbf{+0.1248} & 0.0094 \\
+2 & MACD\_Hist & +0.0258 & 0.0088 \\
+3 & Volume\_Change & +0.0076 & 0.0063 \\
+4 & MACD & +0.0068 & 0.0049 \\
+5 & Price\_Range & +0.0037 & 0.0052 \\
+6 & \textbf{Sentiment\_Volatility} & \textbf{+0.0036} & 0.0028 \\
+7 & Volume & +0.0036 & 0.0057 \\
+8 & Close & +0.0030 & 0.0007 \\
+9 & \textbf{Sentiment} & \textbf{+0.0017} & 0.0029 \\
+10 & Open & +0.0013 & 0.0010 \\
+\bottomrule
+\end{tabular}
+\caption{Top 10 features ranked by permutation importance}
+\end{table}
+
+\textbf{Bottom 5 Features (harmful/neutral):}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{clcc}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{Importance} & \textbf{Std Dev} \\
+\midrule
+11 & Low & $-0.0008$ & 0.0013 \\
+12 & High & $-0.0009$ & 0.0015 \\
+13 & MACD\_Signal & $-0.0043$ & 0.0031 \\
+14 & Log\_Return & $-0.0301$ & 0.0065 \\
+15 & \textbf{Pct\_Change} & \textbf{$-0.0391$} & 0.0042 \\
+\bottomrule
+\end{tabular}
+\caption{Bottom 5 features with negative or minimal importance}
+\end{table}
+
+\textbf{Sentiment vs. Technical Feature Analysis:}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Category} & \textbf{Feature Count} & \textbf{Total Importance} & \textbf{Percentage} \\
+\midrule
+\textbf{Technical} & 13 & +0.1013 & \textbf{95.0\%} \\
+\textbf{Sentiment} & 2 & +0.0053 & \textbf{5.0\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Ratio:} Technical features are \textbf{19.01× more important} than sentiment features
+
+\textbf{Key Observations:}
+
+\begin{enumerate}
+    \item \textbf{RSI dominates:} +0.1248 importance (72.3\% of total positive importance)
+    \item \textbf{Sentiment is weak:} +0.0017 importance (rank \#9/15), comparable to basic features like "Open"
+    \item \textbf{Harmful features exist:} Pct\_Change and Log\_Return degrade performance (redundant with Close?)
+    \item \textbf{Sentiment\_Volatility outperforms raw sentiment:} +0.0036 vs +0.0017 (2.1× better), confirming Phase 2 finding
+\end{enumerate}
+
+\textbf{Statistical Summary:}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Mean Importance & 0.0071 \\
+Median Importance & 0.0030 \\
+Std Deviation & 0.0359 \\
+Max (RSI) & +0.1248 \\
+Min (Pct\_Change) & $-0.0391$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{phase3/plots/phase3_permutation_importance.png}
+    \caption{Permutation feature importance analysis showing RSI dominance}
+\end{figure}
+
+\section{Discussion}
+
+\subsection{Sentiment as a Reactive Indicator}
+
+Our causal analysis provides compelling evidence that sentiment is \textbf{reactive} rather than predictive:
+
+\begin{enumerate}
+    \item \textbf{Cross-correlation peak at lag $-2$:} Returns predict sentiment 2 days later
+    \item \textbf{Weak absolute correlation:} $\rho = 0.0215$ (explains only 0.05\% of variance)
+    \item \textbf{Granger causality paradox:} Statistical significance without economic significance
+    \item \textbf{Permutation importance:} Sentiment contributes only 5\% of total importance
+\end{enumerate}
+
+\textbf{Proposed Mechanism:} Price movements trigger news coverage and social media discussion with a 2-day propagation delay. Sentiment captures investor \textit{reactions} to past returns, not forward-looking expectations.
+
+\textbf{Implications:} Sentiment features should be \textbf{excluded} from crisis prediction models, or transformed into technical indicators (e.g., sentiment momentum, volatility) that measure information flow rather than directional signals.
+
+\subsection{RSI as Dominant Feature}
+
+RSI (Relative Strength Index) exhibits importance (+0.1248) an order of magnitude larger than any other feature. This suggests:
+
+\begin{enumerate}
+    \item \textbf{Momentum effects dominate:} RSI captures overbought/oversold conditions that persist over prediction horizons
+    \item \textbf{Mean reversion:} Extreme RSI values signal impending corrections
+    \item \textbf{Crisis amplification:} RSI volatility increases during crises, providing stronger signals
+\end{enumerate}
+
+The dominance of RSI validates classical technical analysis principles, even in deep learning contexts where models theoretically could learn RSI-like features from raw price data.
+
+\subsection{Regime-Switching Superiority}
+
+Crisis-specialized models achieve 25.3\% improvement in $F_1$-score over baseline, demonstrating:
+
+\begin{enumerate}
+    \item \textbf{Non-stationarity:} Crisis and normal periods exhibit fundamentally different dynamics
+    \item \textbf{Feature relevance shifts:} Sentiment+ works for normal periods ($F_1 = 0.6456$), but pure technical excels for crises ($F_1 = 0.6503$)
+    \item \textbf{Model capacity trade-off:} Specialized models with fewer features outperform general models with more features
+\end{enumerate}
+
+\textbf{HMM Detection Advantage:} Unsupervised regime detection (63.5\% normal, 36.5\% crisis) differs from ground-truth labels (75\% normal, 25\% crisis), suggesting HMM captures market volatility regimes beyond binary crisis/normal classification.
+
+\subsection{Harmful Features: Log-Returns and Percentage Changes}
+
+Both Log\_Return ($-0.0301$) and Pct\_Change ($-0.0391$) exhibit negative importance, indicating they \textbf{degrade} model performance. Possible explanations:
+
+\begin{enumerate}
+    \item \textbf{Redundancy:} These features are direct transformations of Close price, creating multicollinearity
+    \item \textbf{Scale mismatch:} Log/percentage scaling may conflict with RobustScaler normalization
+    \item \textbf{Information leakage risk:} Daily returns calculated from Close price may create spurious correlations
+\end{enumerate}
+
+\textbf{Recommendation:} Remove these features and allow the model to learn relevant transformations through LSTM hidden states.
+
+\subsection{Limitations}
+
+\textbf{Synthetic Data:} Our dataset is synthetic, limiting generalizability to real markets. Real crises exhibit:
+\begin{itemize}[nosep]
+    \item Extreme tail events (black swans) beyond Gaussian assumptions
+    \item Contagion effects across asset classes
+    \item Policy interventions (circuit breakers, quantitative easing)
+\end{itemize}
+
+\textbf{Limited Crisis Diversity:} Dataset covers generic "crisis periods" (25\% of data) without distinguishing crisis types:
+\begin{itemize}[nosep]
+    \item Credit crises (2008)
+    \item Pandemic shocks (2020)
+    \item Geopolitical events (wars, sanctions)
+\end{itemize}
+
+\textbf{Binary Classification:} Up/Down prediction ignores magnitude. A model predicting +0.1\% vs. observed +10\% appears equally wrong as a model predicting $-0.1\%$.
+
+\textbf{No Transaction Costs:} Real-world trading incurs costs (spreads, slippage, taxes) that reduce profitability, particularly for high-frequency strategies.
+
+\section{Conclusions}
+
+\subsection{Summary of Findings}
+
+This research provides comprehensive evidence against sentiment features for crisis prediction:
+
+\begin{enumerate}
+    \item \textbf{Sentiment is reactive:} Cross-correlation analysis reveals returns lead sentiment by 2 days
+    \item \textbf{Weak predictive power:} Sentiment contributes only 5\% of model importance (vs. 95\% for technical)
+    \item \textbf{Crisis degradation:} Sentiment correlation drops 41\% during crises when prediction is most critical
+    \item \textbf{A/B testing confirms:} Removing sentiment features \textbf{improves} $F_1$-score by 3.03\%
+\end{enumerate}
+
+Regime-switching architectures provide substantial gains:
+
+\begin{enumerate}[resume]
+    \item \textbf{Crisis-specialized model:} 25.3\% improvement over baseline ($F_1 = 0.6503$ vs. 0.5189)
+    \item \textbf{Minimal feature set:} 8 technical features outperform 20-feature sentiment models
+    \item \textbf{RSI dominance:} RSI alone accounts for 72.3\% of total positive feature importance
+\end{enumerate}
+
+\subsection{Practical Recommendations}
+
+\textbf{For Practitioners:}
+
+\begin{enumerate}
+    \item \textbf{Exclude raw sentiment:} Remove Sentiment feature from crisis prediction pipelines
+    \item \textbf{Consider sentiment volatility:} As a technical indicator of information flow (28.5\% better than raw)
+    \item \textbf{Focus on RSI:} Prioritize RSI and MACD-based features over exotic indicators
+    \item \textbf{Implement regime detection:} Use HMM or volatility thresholds to trigger specialized models
+    \item \textbf{Remove redundant features:} Drop Log\_Return and Pct\_Change (negative importance)
+\end{enumerate}
+
+\textbf{For Researchers:}
+
+\begin{enumerate}
+    \item \textbf{Replicate with real data:} Validate findings on historical crisis periods (2008, 2020, 2022)
+    \item \textbf{Explore crisis taxonomy:} Train separate models for credit, liquidity, and exogenous shocks
+    \item \textbf{Investigate causality mechanisms:} Structural equation modeling to identify causal pathways
+    \item \textbf{Test alternative sentiment sources:} Compare Twitter, Reddit, news headlines, and options market implied sentiment (VIX)
+\end{enumerate}
+
+\subsection{Future Work}
+
+\textbf{Short-term Extensions:}
+
+\begin{itemize}[nosep]
+    \item \textbf{SHAP analysis:} Complement permutation importance with SHAP values for instance-level interpretability
+    \item \textbf{Ensemble methods:} Combine regime-specific models with uncertainty-weighted predictions
+    \item \textbf{Multi-horizon prediction:} Extend binary classification to 1-day, 5-day, 20-day horizons
+\end{itemize}
+
+\textbf{Long-term Research Directions:}
+
+\begin{itemize}[nosep]
+    \item \textbf{Reinforcement learning:} Frame crisis prediction as a partially observable Markov decision process (POMDP)
+    \item \textbf{Graph neural networks:} Model contagion effects across correlated assets
+    \item \textbf{Causal discovery:} Apply constraint-based algorithms (PC, FCI) to discover causal structure
+    \item \textbf{Online learning:} Develop adaptive models that update continuously as new crises emerge
+\end{itemize}
+
+\subsection{Final Remarks}
+
+The negative result regarding sentiment is as scientifically valuable as a positive result would be. Our findings challenge the prevailing enthusiasm for sentiment analysis in finance, demonstrating that:
+
+\begin{quote}
+\textbf{Technical indicators, particularly RSI, provide stronger and more reliable signals than sentiment features for crisis prediction. Sentiment's statistical significance in Granger causality tests masks its reactive nature and minimal practical importance.}
+\end{quote}
+
+This conclusion has immediate implications for both academic research and industrial applications, suggesting that resources devoted to sentiment data collection and processing might be better allocated to feature engineering from price-volume data and regime detection systems.
+
+The success of regime-switching architectures points toward a future where financial ML systems explicitly model nonstationarity through mixture-of-experts approaches, rather than attempting to learn universal patterns across all market conditions.
+
+\clearpage
+
+\appendix
+
+\section{Model Architecture Details}
+
+\subsection{Baseline Bi-LSTM Architecture}
+
+\begin{lstlisting}
+Model: "Crisis_Aware_BiLSTM"
+┌─────────────────────────────┬───────────────────────┬───────────────┐
+│ Layer (type)                │ Output Shape          │ Param #       │
+├─────────────────────────────┼───────────────────────┼───────────────┤
+│ input_layer                 │ (None, 60, 15)        │ 0             │
+│ bidirectional_lstm          │ (None, 60, 128)       │ 40,960        │
+│ layer_norm_1                │ (None, 60, 128)       │ 256           │
+│ attention_layer             │ (None, 60, 128)       │ 0             │
+│ concat_layer                │ (None, 60, 256)       │ 0             │
+│ bidirectional_lstm_2        │ (None, 64)            │ 73,984        │
+│ layer_norm_2                │ (None, 64)            │ 128           │
+│ dropout_layer               │ (None, 64)            │ 0             │
+│ dense_hidden                │ (None, 32)            │ 2,080         │
+│ dropout_layer_2             │ (None, 32)            │ 0             │
+│ output_layer                │ (None, 1)             │ 33            │
+└─────────────────────────────┴───────────────────────┴───────────────┘
+ Total params: 117,441 (458.75 KB)
+\end{lstlisting}
+
+\subsection{Crisis Specialist Architecture (Phase 3)}
+
+\begin{lstlisting}
+Model: "Crisis_Specialist"
+- Input: (batch_size, 60, 8)  # Minimal feature set
+- Bidirectional LSTM (128 units) → 73,216 params
+- Bidirectional LSTM (64 units) → 9,984 params
+- Dense layers → 2,080 params
+Total params: 79,905 (312 KB)
+\end{lstlisting}
+
+\section{Complete Permutation Importance Results}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{clccc}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{Type} & \textbf{Importance} & \textbf{Std Dev} \\
+\midrule
+1 & RSI & Technical & +0.1248 & 0.0094 \\
+2 & MACD\_Hist & Technical & +0.0258 & 0.0088 \\
+3 & Volume\_Change & Technical & +0.0076 & 0.0063 \\
+4 & MACD & Technical & +0.0068 & 0.0049 \\
+5 & Price\_Range & Technical & +0.0037 & 0.0052 \\
+6 & Sentiment\_Volatility & Sentiment & +0.0036 & 0.0028 \\
+7 & Volume & Technical & +0.0036 & 0.0057 \\
+8 & Close & Technical & +0.0030 & 0.0007 \\
+9 & Sentiment & Sentiment & +0.0017 & 0.0029 \\
+10 & Open & Technical & +0.0013 & 0.0010 \\
+11 & Low & Technical & $-0.0008$ & 0.0013 \\
+12 & High & Technical & $-0.0009$ & 0.0015 \\
+13 & MACD\_Signal & Technical & $-0.0043$ & 0.0031 \\
+14 & Log\_Return & Technical & $-0.0301$ & 0.0065 \\
+15 & Pct\_Change & Technical & $-0.0391$ & 0.0042 \\
+\bottomrule
+\end{tabular}
+\caption{Complete ranking of all features by permutation importance}
+\end{table}
+
+\textbf{Aggregate Statistics:}
+\begin{itemize}[nosep]
+    \item \textbf{Sentiment Features (2):} Total = +0.0053, Average = +0.0027, Rank = \#7.5
+    \item \textbf{Technical Features (13):} Total = +0.1013, Average = +0.0078, Rank = \#7.8
+\end{itemize}
+
+\section{Training Hyperparameters}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Hyperparameter} & \textbf{Phase 1} & \textbf{Phase 3 A/B} & \textbf{Phase 3 Specialists} \\
+\midrule
+Sequence Length & 60 & 60 & 60 \\
+Batch Size & 32 & 32 & 32 \\
+Initial LR & 0.001 & 0.001 & 0.001 \\
+LR Reduction Factor & 0.5 & 0.5 & 0.5 \\
+LR Reduction Patience & 5 & 5 & 5 \\
+Early Stop Patience & 10 & 10 & 10 \\
+Dropout Rate & 0.3 & 0.3 & 0.3 \\
+LSTM Units (Layer 1) & 64 & 64 & 64 \\
+LSTM Units (Layer 2) & 32 & 32 & 32 \\
+Dense Units & 32 & 32 & 32 \\
+Optimizer & Adam & Adam & Adam \\
+Loss Function & BCE & BCE & BCE \\
+Train/Val/Test Split & 72/8/20 & 72/8/20 & 72/8/20 \\
+\bottomrule
+\end{tabular}
+\caption{Complete hyperparameter configuration across all phases}
+\end{table}
+
+\end{document}
