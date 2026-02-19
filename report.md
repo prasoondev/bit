@@ -1,4 +1,4 @@
-# Crisis-Aware Stock Market Prediction: A Deep Learning Approach with Regime-Switching Analysis
+# Stock Market Prediction During Global Crises Using Deep Learning and Sentiment Analysis
 
 
 ## Abstract

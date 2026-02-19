@@ -1,9 +1,8 @@
-\documentclass[11pt,a4paper]{article}
+\documentclass[13pt,a4paper]{article}
 
 % Packages
 \usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}\usepackage{lmodern} % Smoother, higher quality fonts\usepackage[margin=1in]{geometry}
 \usepackage{graphicx}
 \usepackage{amsmath,amssymb,amsthm}
 \usepackage{booktabs}
@@ -25,7 +24,7 @@
     filecolor=magenta,      
     urlcolor=cyan,
     citecolor=blue,
-    pdftitle={Crisis-Aware Stock Market Prediction},
+    pdftitle={Stock Market Prediction During Global Crises Using Deep Learning and Sentiment Analysis},
     pdfauthor={Research Report},
 }
 
@@ -41,7 +40,7 @@
 \pagestyle{fancy}
 \fancyhf{}
 \rhead{\thepage}
-\lhead{Crisis-Aware Stock Market Prediction}
+\lhead{Stock Market Prediction During Global Crises}
 \renewcommand{\headrulewidth}{0.4pt}
 
 % Title formatting
@@ -59,8 +58,8 @@
 \begin{titlepage}
     \centering
     \vspace*{2cm}
-    {\Huge\bfseries Crisis-Aware Stock Market Prediction:\\[0.3cm]
-    A Deep Learning Approach with Regime-Switching Analysis\par}
+    {\Huge\bfseries Stock Market Prediction During Global Crises\\[0.3cm]
+    Using Deep Learning and Sentiment Analysis\par}
     \vspace{2cm}
     {by\par}
     {\Large Ridhima Tamang\par}
@@ -160,21 +159,29 @@ We engineer 7 additional features to capture momentum, volatility, and sentiment
 
 \begin{lstlisting}
 Input Layer: (batch_size, 60, 15)  # 60-day lookback, 15 features
-    ↓
-Bidirectional LSTM (64 units) → 128-dimensional output
-    ↓
+    |
+    v
+Bidirectional LSTM (64 units) -> 128-dimensional output
+    |
+    v
 Layer Normalization
-    ↓
+    |
+    v
 Attention Layer (self-attention)
-    ↓
+    |
+    v
 Concatenation [LSTM output + Attention output]
-    ↓
-Bidirectional LSTM (32 units) → 64-dimensional output
-    ↓
-Layer Normalization → Dropout (0.3)
-    ↓
-Dense (32 units, ReLU) → Dropout (0.3)
-    ↓
+    |
+    v
+Bidirectional LSTM (32 units) -> 64-dimensional output
+    |
+    v
+Layer Normalization -> Dropout (0.3)
+    |
+    v
+Dense (32 units, ReLU) -> Dropout (0.3)
+    |
+    v
 Output Layer (1 unit, Sigmoid)
 \end{lstlisting}
 
@@ -426,16 +433,16 @@ Weak correlations ($< 0.07$) suggest sentiment has minimal direct relationship w
 \toprule
 \textbf{Lag} & \textbf{F-Statistic} & \textbf{P-Value} & \textbf{Significant?} \\
 \midrule
-1 & 0.0403 & 0.8410 & ✗ \\
-\textbf{2} & \textbf{3.1646} & \textbf{0.0423} & \textbf{✓} \\
-3 & 2.1281 & 0.0944 & ✗ \\
-4 & 1.6023 & 0.1707 & ✗ \\
-5 & 1.3340 & 0.2464 & ✗ \\
-6 & 1.5572 & 0.1553 & ✗ \\
-7 & 1.4238 & 0.1906 & ✗ \\
-8 & 1.2519 & 0.2641 & ✗ \\
-9 & 1.1305 & 0.3366 & ✗ \\
-10 & 1.1767 & 0.3011 & ✗ \\
+1 & 0.0403 & 0.8410 & No \\
+\textbf{2} & \textbf{3.1646} & \textbf{0.0423} & \textbf{Yes} \\
+3 & 2.1281 & 0.0944 & No \\
+4 & 1.6023 & 0.1707 & No \\
+5 & 1.3340 & 0.2464 & No \\
+6 & 1.5572 & 0.1553 & No \\
+7 & 1.4238 & 0.1906 & No \\
+8 & 1.2519 & 0.2641 & No \\
+9 & 1.1305 & 0.3366 & No \\
+10 & 1.1767 & 0.3011 & No \\
 \bottomrule
 \end{tabular}
 \caption{Granger causality test results for all periods}
@@ -545,7 +552,7 @@ Crisis Impact & 41\% drop & Sentiment fails in crises \\
 \toprule
 \textbf{Model} & \textbf{Accuracy} & \textbf{$F_1$-Score} & \textbf{Winner} \\
 \midrule
-\textbf{Model B (Technical)} & \textbf{0.6130} & \textbf{0.6092} & \textbf{🏆} \\
+\textbf{Model B (Technical)} & \textbf{0.6130} & \textbf{0.6092} & \textbf{Winner} \\
 Model A (Sentiment+) & 0.5982 & 0.5913 & \\
 \bottomrule
 \end{tabular}
@@ -875,34 +882,39 @@ The success of regime-switching architectures points toward a future where finan
 
 \subsection{Baseline Bi-LSTM Architecture}
 
-\begin{lstlisting}
-Model: "Crisis_Aware_BiLSTM"
-┌─────────────────────────────┬───────────────────────┬───────────────┐
-│ Layer (type)                │ Output Shape          │ Param #       │
-├─────────────────────────────┼───────────────────────┼───────────────┤
-│ input_layer                 │ (None, 60, 15)        │ 0             │
-│ bidirectional_lstm          │ (None, 60, 128)       │ 40,960        │
-│ layer_norm_1                │ (None, 60, 128)       │ 256           │
-│ attention_layer             │ (None, 60, 128)       │ 0             │
-│ concat_layer                │ (None, 60, 256)       │ 0             │
-│ bidirectional_lstm_2        │ (None, 64)            │ 73,984        │
-│ layer_norm_2                │ (None, 64)            │ 128           │
-│ dropout_layer               │ (None, 64)            │ 0             │
-│ dense_hidden                │ (None, 32)            │ 2,080         │
-│ dropout_layer_2             │ (None, 32)            │ 0             │
-│ output_layer                │ (None, 1)             │ 33            │
-└─────────────────────────────┴───────────────────────┴───────────────┘
- Total params: 117,441 (458.75 KB)
-\end{lstlisting}
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Layer (type)} & \textbf{Output Shape} & \textbf{Param \#} \\
+\midrule
+input\_layer & (None, 60, 15) & 0 \\
+bidirectional\_lstm & (None, 60, 128) & 40,960 \\
+layer\_norm\_1 & (None, 60, 128) & 256 \\
+attention\_layer & (None, 60, 128) & 0 \\
+concat\_layer & (None, 60, 256) & 0 \\
+bidirectional\_lstm\_2 & (None, 64) & 73,984 \\
+layer\_norm\_2 & (None, 64) & 128 \\
+dropout\_layer & (None, 64) & 0 \\
+dense\_hidden & (None, 32) & 2,080 \\
+dropout\_layer\_2 & (None, 32) & 0 \\
+output\_layer & (None, 1) & 33 \\
+\midrule
+\multicolumn{2}{l}{\textbf{Total params:}} & \textbf{117,441 (458.75 KB)} \\
+\bottomrule
+\end{tabular}
+\caption{Crisis-Aware Bi-LSTM model architecture summary}
+\end{table}
 
 \subsection{Crisis Specialist Architecture (Phase 3)}
 
 \begin{lstlisting}
 Model: "Crisis_Specialist"
 - Input: (batch_size, 60, 8)  # Minimal feature set
-- Bidirectional LSTM (128 units) → 73,216 params
-- Bidirectional LSTM (64 units) → 9,984 params
-- Dense layers → 2,080 params
+- Bidirectional LSTM (128 units) -> 73,216 params
+- Bidirectional LSTM (64 units) -> 9,984 params
+- Dense layers -> 2,080 params
 Total params: 79,905 (312 KB)
 \end{lstlisting}
 
