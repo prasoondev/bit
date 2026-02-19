@@ -37,37 +37,9 @@ Our work makes the following contributions:
 
 ---
 
-## 2. Related Work
+## 2. Methodology
 
-### 2.1 Deep Learning for Financial Prediction
-
-Recurrent neural networks (RNNs), particularly Long Short-Term Memory (LSTM) networks, have become the dominant architecture for time-series financial prediction due to their ability to capture long-term dependencies. Bidirectional LSTMs process sequences in both forward and backward directions, enabling the model to leverage future context—critical for identifying trend reversals and regime changes.
-
-Attention mechanisms, introduced by Bahdanau et al. (2015), allow models to dynamically weight the importance of different time steps. In financial applications, attention can identify critical events (earnings announcements, policy changes) that disproportionately influence future price movements.
-
-### 2.2 Sentiment Analysis in Finance
-
-The application of natural language processing to financial markets has grown substantially, with studies analyzing Twitter sentiment, news headlines, and earnings call transcripts. However, research on sentiment's predictive power yields mixed results. Some studies report correlation between sentiment and returns, while others find that sentiment is reactive (lagging indicator) rather than predictive (leading indicator).
-
-### 2.3 Regime-Switching Models
-
-Hamilton's (1989) regime-switching models use probabilistic frameworks to identify distinct market states. Hidden Markov Models (HMMs) have been applied to detect volatility regimes, with applications in portfolio optimization and risk management. Recent work extends these probabilistic models with neural networks, creating hybrid systems that combine regime detection with deep learning prediction.
-
-### 2.4 Research Gap
-
-Despite extensive literature, three gaps remain:
-
-1. **Insufficient crisis-specific analysis:** Most studies aggregate crisis and normal periods, masking regime-dependent effects
-2. **Lack of causal analysis:** Correlation-based sentiment studies fail to establish directionality (does sentiment cause returns, or vice versa?)
-3. **Limited feature importance quantification:** Few studies rigorously measure individual feature contributions using model-agnostic methods
-
-Our work addresses these gaps through comprehensive causal analysis, crisis-specific modeling, and permutation-based feature importance.
-
----
-
-## 3. Methodology
-
-### 3.1 Dataset
+### 2.1 Dataset
 
 We analyze a synthetic dataset spanning **52.3 years** (January 1, 2010 – April 24, 2062), containing **13,647 daily observations** with 10 raw features:
 
@@ -86,7 +58,7 @@ We analyze a synthetic dataset spanning **52.3 years** (January 1, 2010 – Apri
 **Crisis Labels:**
 - Binary crisis indicator (25% of dataset, 3,407 days)
 
-### 3.2 Feature Engineering
+### 2.2 Feature Engineering
 
 We engineer 7 additional features to capture momentum, volatility, and sentiment dynamics:
 
@@ -120,7 +92,7 @@ $$
 
 **Total feature set:** 15 features (8 raw + 7 engineered)
 
-### 3.3 Phase 1: Baseline Bi-LSTM with Attention
+### 2.3 Phase 1: Baseline Bi-LSTM with Attention
 
 **Architecture:**
 
@@ -158,9 +130,9 @@ Output Layer (1 unit, Sigmoid)
 - Validation: 8.00% (1,077 samples)
 - Test: 20.04% (2,691 samples, 46.04% crisis)
 
-### 3.4 Phase 2: Causality Analysis
+### 2.4 Phase 2: Causality Analysis
 
-#### 3.4.1 Granger Causality Test
+#### 2.4.1 Granger Causality Test
 
 We test whether sentiment Granger-causes returns using Vector Autoregression (VAR) models:
 
@@ -172,7 +144,7 @@ $$
 
 We test lags $p \in [1, 10]$ using F-tests at $\alpha = 0.05$ significance level.
 
-#### 3.4.2 Lagged Cross-Correlation
+#### 2.4.2 Lagged Cross-Correlation
 
 We compute Pearson correlation between returns at time $t$ and sentiment at time $t + \tau$:
 
@@ -183,7 +155,7 @@ $$
 Peak correlation at $\tau < 0$ indicates sentiment is **reactive** (returns lead sentiment).  
 Peak correlation at $\tau > 0$ indicates sentiment is **predictive** (sentiment leads returns).
 
-#### 3.4.3 Sentiment Volatility Analysis
+#### 2.4.3 Sentiment Volatility Analysis
 
 We compare predictive power of raw sentiment vs. sentiment instability:
 
@@ -195,9 +167,9 @@ $$
 \text{Corr}_{\text{vol}} = \text{Corr}(\text{Return}_t, \text{Sentiment\_Volatility}_t)
 $$
 
-### 3.5 Phase 3: Regime-Switching Models
+### 2.5 Phase 3: Regime-Switching Models
 
-#### 3.5.1 A/B Testing: Sentiment vs. Technical Features
+#### 2.5.1 A/B Testing: Sentiment vs. Technical Features
 
 We train two competing models:
 
@@ -210,7 +182,7 @@ We train two competing models:
 
 Both models use identical architectures (86K and 83K parameters respectively) and training procedures.
 
-#### 3.5.2 Hidden Markov Model Regime Detection
+#### 2.5.2 Hidden Markov Model Regime Detection
 
 We fit a 2-state Gaussian HMM to identify crisis and normal regimes:
 
@@ -225,7 +197,7 @@ where $s_t \in \{\text{Normal, Crisis}\}$
 
 States are identified by volatility levels: $\sigma_{\text{crisis}} > \sigma_{\text{normal}}$
 
-#### 3.5.3 Specialized Models
+#### 2.5.3 Specialized Models
 
 We train regime-specific models:
 
@@ -238,7 +210,7 @@ The crisis specialist uses a minimal feature set:
 
 Parameters: 79,905 (312 KB)
 
-### 3.6 Permutation Feature Importance
+### 2.6 Permutation Feature Importance
 
 We use model-agnostic permutation importance to quantify feature contributions. For each feature $j$:
 
@@ -253,14 +225,17 @@ Negative importance indicates feature is harmful (removal improves performance).
 
 ---
 
-## 4. Experimental Results
+## 3. Experimental Results
 
-### 4.1 Phase 1: Baseline Model Performance
+### 3.1 Phase 1: Baseline Model Performance
 
 **Training Summary:**
 - Converged in 25 epochs (early stopping)
 - Final validation loss: 0.6200
 - Learning rate reduced at epoch 20 (0.001 → 0.0005)
+
+![Training History](phase1/plots/training_history.png)
+*Figure 1: Training and validation metrics across 25 epochs*
 
 #### Overall Performance (All Periods)
 
@@ -279,6 +254,9 @@ Negative importance indicates feature is harmful (removal improves performance).
 | **Actual Down** | 933 (68.8%) | 421 (31.2%) |
 | **Actual Up** | 608 (45.5%) | 729 (54.5%) |
 
+![Confusion Matrix Overall](phase1/plots/confusion_matrix_overall.png)
+*Figure 2: Overall confusion matrix on test set (2,691 samples)*
+
 #### Crisis Period Performance
 
 | Metric | Crisis | Normal | Δ (Penalty) |
@@ -293,6 +271,9 @@ Negative importance indicates feature is harmful (removal improves performance).
 |---|---|---|
 | **Actual Down** | 452 (71.6%) | 179 (28.4%) |
 | **Actual Up** | 329 (54.1%) | 279 (45.9%) |
+
+![Confusion Matrix Crisis](phase1/plots/confusion_matrix_crisis_periods.png)
+*Figure 3: Crisis-only confusion matrix (1,239 samples)*
 
 **Key Findings:**
 
@@ -309,9 +290,12 @@ Negative importance indicates feature is harmful (removal improves performance).
 
 Weak correlations ($< 0.07$) suggest sentiment has minimal direct relationship with model predictions, consistent with our later findings that sentiment contributes only 5% of importance.
 
-### 4.2 Phase 2: Causality Analysis Results
+![Sentiment Analysis](phase1/plots/sentiment_analysis.png)
+*Figure 4: Sentiment correlation with predictions across crisis and normal periods*
 
-#### 4.2.1 Granger Causality Test Results
+### 3.2 Phase 2: Causality Analysis Results
+
+#### 3.2.1 Granger Causality Test Results
 
 **Null Hypothesis:** Sentiment does NOT Granger-cause Returns
 
@@ -332,7 +316,13 @@ Weak correlations ($< 0.07$) suggest sentiment has minimal direct relationship w
 
 **Crisis-Only Analysis:** Identical results (lag 2: $p = 0.044$), indicating the relationship is consistent across regimes.
 
-#### 4.2.2 Cross-Correlation Analysis
+![Granger Causality All Periods](phase2/plots/granger_causality_all.png)
+*Figure 5: Granger causality F-statistics and p-values for all periods*
+
+![Granger Causality Crisis](phase2/plots/granger_causality_crisis.png)
+*Figure 6: Granger causality F-statistics and p-values for crisis periods only*
+
+#### 3.2.2 Cross-Correlation Analysis
 
 **Peak Correlation:** $\rho = 0.0215$ at lag $\tau = -2$ days
 
@@ -343,7 +333,10 @@ Weak correlations ($< 0.07$) suggest sentiment has minimal direct relationship w
 
 **Mechanism:** Investors observe price movements, then sentiment reflects those movements 2 days later (news articles, social media reactions propagate with delay).
 
-#### 4.2.3 Sentiment Volatility Comparison
+![Lagged Cross-Correlation](phase2/plots/lagged_cross_correlation.png)
+*Figure 7: Cross-correlation between returns and sentiment at various lags*
+
+#### 3.2.3 Sentiment Volatility Comparison
 
 | Feature | Correlation with Returns |
 |---------|--------------------------|
@@ -359,7 +352,10 @@ Weak correlations ($< 0.07$) suggest sentiment has minimal direct relationship w
 
 This demonstrates that sentiment's already-weak predictive power deteriorates further during the periods where prediction is most critical.
 
-#### 4.2.4 Phase 2 Statistical Summary
+![Sentiment Volatility Analysis](phase2/plots/sentiment_volatility_analysis.png)
+*Figure 8: Comparison of raw sentiment vs. sentiment volatility correlations*
+
+#### 3.2.4 Phase 2 Statistical Summary
 
 | Test | Result | Interpretation |
 |------|--------|----------------|
@@ -370,9 +366,12 @@ This demonstrates that sentiment's already-weak predictive power deteriorates fu
 
 **Paradox Resolution:** Granger causality tests whether past sentiment values help predict current returns in a VAR framework. The test can be significant even if the correlation is weak (0.0215) because it measures statistical predictability, not practical effect size. However, the negative lag in cross-correlation reveals the true directionality: sentiment is reactive, not causative in an economic sense.
 
-### 4.3 Phase 3: Regime-Switching Results
+![Phase 2 Quick Summary](phase2/plots/PHASE2_QUICK_SUMMARY.png)
+*Figure 9: Phase 2 comprehensive summary with key statistical findings*
 
-#### 4.3.1 A/B Testing: Sentiment vs. Technical
+### 3.3 Phase 3: Regime-Switching Results
+
+#### 3.3.1 A/B Testing: Sentiment vs. Technical
 
 **Model A (Sentiment+):** 20 features, 86,049 parameters
 **Model B (Technical Only):** 15 features, 83,489 parameters
@@ -386,7 +385,10 @@ This demonstrates that sentiment's already-weak predictive power deteriorates fu
 
 **Interpretation:** Adding 5 sentiment-derived features (25% increase in feature count) **degrades** performance, confirming that sentiment introduces noise rather than signal.
 
-#### 4.3.2 HMM Regime Detection
+![A/B Testing Results](phase3/plots/phase3_ab_testing_results.png)
+*Figure 10: A/B testing comparison between Sentiment+ and Technical-only models*
+
+#### 3.3.2 HMM Regime Detection
 
 **2-State Gaussian HMM Results:**
 
@@ -399,7 +401,7 @@ This demonstrates that sentiment's already-weak predictive power deteriorates fu
 - Crisis state identified by higher volatility ($\sigma_{\text{crisis}} > \sigma_{\text{normal}}$)
 - Regime allocation differs from ground-truth crisis labels (which cover 25% of data), suggesting HMM detects additional volatile periods not labeled as formal crises
 
-#### 4.3.3 Specialized Model Performance
+#### 3.3.3 Specialized Model Performance
 
 **Normal Specialist (Sentiment+):**
 - Features: 20
@@ -424,7 +426,7 @@ This demonstrates that sentiment's already-weak predictive power deteriorates fu
 
 **Insight:** Specialized model trained exclusively on crisis data with minimal technical features outperforms general-purpose model by substantial margin, validating regime-specific approach.
 
-#### 4.3.4 Permutation Feature Importance
+#### 3.3.4 Permutation Feature Importance
 
 Analysis on 1,560 test samples, 5 permutations per feature:
 
@@ -483,11 +485,14 @@ Analysis on 1,560 test samples, 5 permutations per feature:
 | Max (RSI) | +0.1248 |
 | Min (Pct_Change) | -0.0391 |
 
+![Permutation Importance](phase3/plots/phase3_permutation_importance.png)
+*Figure 11: Permutation feature importance analysis showing RSI dominance*
+
 ---
 
-## 5. Discussion
+## 4. Discussion
 
-### 5.1 Sentiment as a Reactive Indicator
+### 4.1 Sentiment as a Reactive Indicator
 
 Our causal analysis provides compelling evidence that sentiment is **reactive** rather than predictive:
 
@@ -500,7 +505,7 @@ Our causal analysis provides compelling evidence that sentiment is **reactive** 
 
 **Implications:** Sentiment features should be **excluded** from crisis prediction models, or transformed into technical indicators (e.g., sentiment momentum, volatility) that measure information flow rather than directional signals.
 
-### 5.2 RSI as Dominant Feature
+### 4.2 RSI as Dominant Feature
 
 RSI (Relative Strength Index) exhibits importance (+0.1248) an order of magnitude larger than any other feature. This suggests:
 
@@ -510,7 +515,7 @@ RSI (Relative Strength Index) exhibits importance (+0.1248) an order of magnitud
 
 The dominance of RSI validates classical technical analysis principles, even in deep learning contexts where models theoretically could learn RSI-like features from raw price data.
 
-### 5.3 Regime-Switching Superiority
+### 4.3 Regime-Switching Superiority
 
 Crisis-specialized models achieve 25.3% improvement in F₁-score over baseline, demonstrating:
 
@@ -520,7 +525,7 @@ Crisis-specialized models achieve 25.3% improvement in F₁-score over baseline,
 
 **HMM Detection Advantage:** Unsupervised regime detection (63.5% normal, 36.5% crisis) differs from ground-truth labels (75% normal, 25% crisis), suggesting HMM captures market volatility regimes beyond binary crisis/normal classification.
 
-### 5.4 Harmful Features: Log-Returns and Percentage Changes
+### 4.4 Harmful Features: Log-Returns and Percentage Changes
 
 Both Log_Return (-0.0301) and Pct_Change (-0.0391) exhibit negative importance, indicating they **degrade** model performance. Possible explanations:
 
@@ -530,7 +535,7 @@ Both Log_Return (-0.0301) and Pct_Change (-0.0391) exhibit negative importance, 
 
 **Recommendation:** Remove these features and allow the model to learn relevant transformations through LSTM hidden states.
 
-### 5.5 Limitations
+### 4.5 Limitations
 
 **Synthetic Data:** Our dataset is synthetic, limiting generalizability to real markets. Real crises exhibit:
 - Extreme tail events (black swans) beyond Gaussian assumptions
@@ -548,9 +553,9 @@ Both Log_Return (-0.0301) and Pct_Change (-0.0391) exhibit negative importance, 
 
 ---
 
-## 6. Conclusions
+## 5. Conclusions
 
-### 6.1 Summary of Findings
+### 5.1 Summary of Findings
 
 This research provides comprehensive evidence against sentiment features for crisis prediction:
 
@@ -565,7 +570,7 @@ Regime-switching architectures provide substantial gains:
 6. **Minimal feature set:** 8 technical features outperform 20-feature sentiment models
 7. **RSI dominance:** RSI alone accounts for 72.3% of total positive feature importance
 
-### 6.2 Practical Recommendations
+### 5.2 Practical Recommendations
 
 **For Practitioners:**
 
@@ -582,7 +587,7 @@ Regime-switching architectures provide substantial gains:
 3. **Investigate causality mechanisms:** Structural equation modeling to identify causal pathways
 4. **Test alternative sentiment sources:** Compare Twitter, Reddit, news headlines, and options market implied sentiment (VIX)
 
-### 6.3 Future Work
+### 5.3 Future Work
 
 **Short-term Extensions:**
 
@@ -597,7 +602,7 @@ Regime-switching architectures provide substantial gains:
 - **Causal discovery:** Apply constraint-based algorithms (PC, FCI) to discover causal structure
 - **Online learning:** Develop adaptive models that update continuously as new crises emerge
 
-### 6.4 Final Remarks
+### 5.4 Final Remarks
 
 The negative result regarding sentiment is as scientifically valuable as a positive result would be. Our findings challenge the prevailing enthusiasm for sentiment analysis in finance, demonstrating that:
 
